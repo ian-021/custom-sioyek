@@ -51,6 +51,8 @@ class CachedChecksummer;
 class CommandManager;
 class Command;
 class PdfViewOpenGLWidget;
+class WebLinkPopup;
+class RrrReader;
 class DatabaseManager;
 class DocumentManager;
 class TextToSpeechHandler;
@@ -170,6 +172,11 @@ public:
     PdfViewOpenGLWidget* opengl_widget = nullptr;
     PdfViewOpenGLWidget* helper_opengl_widget_ = nullptr;
     QScrollBar* scroll_bar = nullptr;
+    // in-window preview of web links, created lazily on first use
+    WebLinkPopup* web_link_popup_ = nullptr;
+    bool web_link_popup_dismissed_on_press = false;
+    // rrr speed reader overlay, created lazily on first use
+    RrrReader* rrr_reader_ = nullptr;
 
     QJsonDocument commands_doc_json_document;
     QJsonDocument config_doc_json_document;
@@ -479,6 +486,14 @@ public:
 
     void show_password_prompt_if_required();
     void handle_link_click(const PdfLink& link);
+    // open a web url either in the in-window popup (default) or in the system browser
+    void open_web_link(const std::wstring& url);
+    WebLinkPopup* get_web_link_popup();
+    bool is_web_link_popup_visible();
+    void close_web_link_popup();
+    // opens the rrr speed reader at the word under pos; closing it shows the word it stopped on
+    void open_rrr_reader(AbsoluteDocumentPos pos);
+    bool is_rrr_reader_visible();
 
     void on_next_text_suggestion();
     void on_prev_text_suggestion();

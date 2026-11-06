@@ -12,6 +12,7 @@ float DARK_MODE_BACKGROUND_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 float CUSTOM_COLOR_MODE_EMPTY_BACKGROUND_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 float RULER_COLOR[3] = { 0.5f, 0.5f, 0.5f };
 float RULER_MARKER_COLOR[3] = { 1.0f, 0.0f, 0.0f };
+float RULER_HIGHLIGHT_COLOR[3] = { 1.0f, 0.85f, 0.2f };
 float CUSTOM_BACKGROUND_COLOR[3] = { 0.18f, 0.204f, 0.251f };
 float CUSTOM_TEXT_COLOR[3] = { 0.847f, 0.871f, 0.914f };
 float STATUS_BAR_COLOR[3] = { 0.0f, 0.0f, 0.0f };
@@ -148,6 +149,18 @@ bool SHOULD_DRAW_UNRENDERED_PAGES = false;
 bool PRESERVE_IMAGE_COLORS = false;
 bool INVERTED_PRESERVED_IMAGE_COLORS = false;
 bool HOVER_OVERVIEW = false;
+// open http(s) links in an in-window preview popup (gwern.net style) instead of the system browser
+bool WEB_LINK_POPUP = true;
+float WEB_LINK_POPUP_SIZE[2] = { 0.75f, 0.8f };
+// hovering a web link for this many milliseconds starts loading it in the hidden popup (-1 disables)
+int WEB_LINK_POPUP_PRELOAD_DELAY_MS = 150;
+// rrr, the speed reader opened by the `rrr` command
+int RRR_WPM = 300;
+int RRR_FONT_SIZE = 64;
+std::wstring RRR_FONT = L"";
+float RRR_BACKGROUND_COLOR[3] = { 0.078f, 0.078f, 0.078f };
+float RRR_TEXT_COLOR[3] = { 0.910f, 0.902f, 0.890f };
+float RRR_FOCUS_COLOR[3] = { 1.0f, 0.314f, 0.251f };
 bool RERENDER_OVERVIEW = true;
 bool LINEAR_TEXTURE_FILTERING = false;
 bool RULER_MODE = true;
@@ -897,6 +910,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_color3(L"synctex_highlight_color", DEFAULT_SYNCTEX_HIGHLIGHT_COLOR);
     add_color3(L"ruler_color", RULER_COLOR);
     add_color3(L"ruler_marker_color", RULER_MARKER_COLOR);
+    add_color3(L"ruler_highlight_color", RULER_HIGHLIGHT_COLOR);
     add_color3(L"background_color", BACKGROUND_COLOR);
     add_color3(L"dark_mode_background_color", DARK_MODE_BACKGROUND_COLOR);
     add_color3(L"custom_color_mode_empty_background_color", CUSTOM_COLOR_MODE_EMPTY_BACKGROUND_COLOR);
@@ -982,6 +996,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_bool(L"sort_bookmarks_by_location", &SORT_BOOKMARKS_BY_LOCATION);
     add_bool(L"sort_highlights_by_location", &SORT_HIGHLIGHTS_BY_LOCATION);
     add_bool(L"hover_overview", &HOVER_OVERVIEW);
+    add_bool(L"web_link_popup", &WEB_LINK_POPUP);
     add_bool(L"rerender_overview", &RERENDER_OVERVIEW);
     add_bool(L"wheel_zoom_on_cursor", &WHEEL_ZOOM_ON_CURSOR);
     add_bool(L"linear_filter", &LINEAR_TEXTURE_FILTERING);
@@ -1123,6 +1138,14 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
     add_ivec2(L"single_main_window_size", SINGLE_MAIN_WINDOW_SIZE);
     add_ivec2(L"single_main_window_move", SINGLE_MAIN_WINDOW_MOVE);
     add_fvec2(L"overview_size", OVERVIEW_SIZE);
+    add_fvec2(L"web_link_popup_size", WEB_LINK_POPUP_SIZE);
+    add_int(L"web_link_popup_preload_delay", &WEB_LINK_POPUP_PRELOAD_DELAY_MS, IntExtras{-1, 5000});
+    add_int(L"rrr_wpm", &RRR_WPM, IntExtras{100, 1000});
+    add_int(L"rrr_font_size", &RRR_FONT_SIZE, IntExtras{12, 400});
+    add_string(L"rrr_font", &RRR_FONT);
+    add_color3(L"rrr_background_color", RRR_BACKGROUND_COLOR);
+    add_color3(L"rrr_text_color", RRR_TEXT_COLOR);
+    add_color3(L"rrr_focus_color", RRR_FOCUS_COLOR);
     add_fvec2(L"overview_offset", OVERVIEW_OFFSET);
     add_rect(L"portrait_back_ui_rect", &PORTRAIT_BACK_UI_RECT);
     add_rect(L"portrait_forward_ui_rect", &PORTRAIT_FORWARD_UI_RECT);

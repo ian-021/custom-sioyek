@@ -4043,6 +4043,43 @@ public:
 
 };
 
+class RrrCommand : public Command {
+public:
+    static inline const std::string cname = "rrr";
+    static inline const std::string hname = "Speed-read from a clicked word, one word at a time (rrr)";
+
+    std::optional<AbsoluteDocumentPos> point_;
+
+    RrrCommand(MainWidget* w) : Command(cname, w) {};
+
+    std::optional<Requirement> next_requirement(MainWidget* widget) {
+        if (!point_.has_value()) {
+            Requirement req = { RequirementType::Point, "Word to start reading from" };
+            return req;
+        }
+        return {};
+    }
+
+    void pre_perform() {
+        widget->set_status_message(L"rrr: click the word to start reading from (esc to cancel)");
+        widget->invalidate_ui();
+    }
+
+    void set_point_requirement(AbsoluteDocumentPos value) {
+        point_ = value;
+    }
+
+    void on_cancel() override {
+        widget->set_status_message(L"");
+        widget->invalidate_ui();
+    }
+
+    void perform() {
+        widget->set_status_message(L"");
+        widget->open_rrr_reader(point_.value());
+    }
+};
+
 #ifdef Q_OS_MACOS
 class MacosLookupCommand : public Command {
 public:
@@ -7137,6 +7174,7 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
 #ifdef Q_OS_MACOS
     register_command<MacosLookupCommand>();
 #endif
+    register_command<RrrCommand>();
     register_command<CopyAllTextCommand>();
     register_command<CopyCurrentChapterTextCommand>();
     register_command<ToggleFullscreenCommand>();

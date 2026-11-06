@@ -80,6 +80,8 @@
 #include "document.h"
 #include "document_view.h"
 #include "pdf_view_opengl_widget.h"
+#include "web_link_popup.h"
+#include "rrr_reader.h"
 #include "config.h"
 #include "utf8.h"
 #include "synctex/synctex_parser.h"
@@ -111,6 +113,8 @@ extern bool SORT_BOOKMARKS_BY_LOCATION;
 extern bool SORT_HIGHLIGHTS_BY_LOCATION;
 extern bool FLAT_TABLE_OF_CONTENTS;
 extern bool HOVER_OVERVIEW;
+extern bool WEB_LINK_POPUP;
+extern int WEB_LINK_POPUP_PRELOAD_DELAY_MS;
 extern bool WHEEL_ZOOM_ON_CURSOR;
 extern float MOVE_SCREEN_PERCENTAGE;
 extern std::wstring LIBGEN_ADDRESS;
@@ -517,6 +521,12 @@ void MainWidget::resizeEvent(QResizeEvent* resize_event) {
     if (text_selection_buttons_) {
         QCoreApplication::postEvent(get_text_selection_buttons(), resize_event->clone());
     }
+    if (web_link_popup_) {
+        web_link_popup_->update_geometry(main_window_width, main_window_height);
+    }
+    if (rrr_reader_) {
+        rrr_reader_->update_geometry(main_window_width, main_window_height);
+    }
     if (search_buttons_) {
         QCoreApplication::postEvent(get_search_buttons(), resize_event->clone());
     }
@@ -772,12 +782,20 @@ void MainWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
             if (HOVER_OVERVIEW) {
                 set_overview_link(link.value());
             }
+            // start loading web links in the (hidden) popup so a click feels instant
+            if (WEB_LINK_POPUP && WEB_LINK_POPUP_PRELOAD_DELAY_MS >= 0 && WebLinkPopup::is_available()
+                && link.value().uri.substr(0, 4) == "http") {
+                get_web_link_popup()->preload_url(QUrl(QString::fromStdString(link.value().uri)));
+            }
         }
         else {
             setCursor(Qt::ArrowCursor);
             if (HOVER_OVERVIEW) {
                 set_overview_page({});
                 //            invalidate_render();
+            }
+            if (web_link_popup_) {
+                web_link_popup_->cancel_preload();
             }
         }
     }
@@ -1593,6 +1611,17 @@ std::wstring MainWidget::get_status_string(bool is_right) {
 }
 
 void MainWidget::handle_escape() {
+
+    if (is_rrr_reader_visible()) {
+        rrr_reader_->close_reader();
+        return;
+    }
+
+    if (is_web_link_popup_visible()) {
+        close_web_link_popup();
+        setFocus();
+        return;
+    }
 
     // add high escape priority to overview and search, if any of them are escaped, do not escape any further
     if (opengl_widget) {
@@ -2980,6 +3009,17 @@ TextUnderPointerInfo MainWidget::find_location_of_text_under_pointer(DocumentPos
 }
 
 void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
+    // releasing the button ends the selection drag, so stop the scrolling that dragging past the
+    // window's edge started (otherwise it keeps scrolling forever)
+    if (is_mouse_edge_scrolling && mevent->button() == Qt::LeftButton) {
+        set_fixed_velocity(0, 0);
+        is_mouse_edge_scrolling = false;
+    }
+
+    if (web_link_popup_dismissed_on_press) {
+        web_link_popup_dismissed_on_press = false;
+        return;
+    }
 
     bool is_shift_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ShiftModifier);
     bool is_control_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ControlModifier);
@@ -3152,6 +3192,13 @@ void MainWidget::handle_triple_click(AbsoluteDocumentPos mouse_abspos) {
 }
 
 void MainWidget::mousePressEvent(QMouseEvent* mevent) {
+    // clicking anywhere outside the web link popup dismisses it, like gwern.net's popups
+    if (is_web_link_popup_visible()) {
+        close_web_link_popup();
+        web_link_popup_dismissed_on_press = true;
+        setFocus();
+        return;
+    }
     bool is_shift_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ShiftModifier);
     bool is_control_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ControlModifier);
     bool is_command_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::MetaModifier);
@@ -3220,6 +3267,11 @@ void MainWidget::mousePressEvent(QMouseEvent* mevent) {
 }
 
 void MainWidget::wheelEvent(QWheelEvent* wevent) {
+    // scrolling over the web link popup belongs to the popup, even when the page can't scroll further
+    if (is_web_link_popup_visible() && web_link_popup_->geometry().contains(wevent->position().toPoint())) {
+        wevent->accept();
+        return;
+    }
 
     if (IGNORE_SCROLL_EVENTS) return;
 
@@ -3722,7 +3774,11 @@ bool MainWidget::overview_under_pos(WindowPos pos) {
 
     if (main_document_view && (link = main_document_view->get_link_in_pos(pos))) {
         if (QString::fromStdString(link.value().uri).startsWith("http")) {
-            // can't open overview to web links
+            // the "overview" of a web link is the in-window web popup
+            if (WEB_LINK_POPUP && WebLinkPopup::is_available()) {
+                open_web_link(utf8_decode(link.value().uri));
+                return true;
+            }
             return false;
         }
         else {
@@ -4578,9 +4634,84 @@ void MainWidget::on_new_paper_added(const std::wstring& file_path) {
         invalidate_render();
     }
 }
+WebLinkPopup* MainWidget::get_web_link_popup() {
+    if (!web_link_popup_) {
+        web_link_popup_ = new WebLinkPopup(this);
+        web_link_popup_->update_geometry(main_window_width, main_window_height);
+        connect(web_link_popup_, &WebLinkPopup::closed, this, [this]() {
+            setFocus();
+            invalidate_render();
+        });
+    }
+    return web_link_popup_;
+}
+
+bool MainWidget::is_web_link_popup_visible() {
+    return web_link_popup_ && web_link_popup_->isVisible();
+}
+
+void MainWidget::close_web_link_popup() {
+    if (web_link_popup_) {
+        web_link_popup_->close_popup();
+    }
+}
+
+void MainWidget::open_rrr_reader(AbsoluteDocumentPos pos) {
+    if (!rrr_reader_) {
+        rrr_reader_ = new RrrReader(this);
+        connect(rrr_reader_, &RrrReader::closed, this, [this]() {
+            setFocus();
+            // remember the speed and font size set from the keyboard
+            std::vector<std::wstring> changed = rrr_reader_->changed_configs();
+            for (const std::wstring& name : changed) {
+                if (Config* conf = config_manager->get_mut_config_with_name(name)) {
+                    conf->is_auto = true;
+                }
+            }
+            if (!changed.empty()) {
+                save_auto_config();
+            }
+
+            std::optional<RrrWord> word = rrr_reader_->current_word();
+            if (word && main_document_view_has_document()) {
+                AbsoluteRect rect = DocumentRect(word->rect, word->page).to_absolute(doc());
+                if (!rect.to_window_normalized(main_document_view).is_visible()) {
+                    push_state();
+                    main_document_view->goto_offset_within_page(word->page, (word->rect.y0 + word->rect.y1) / 2);
+                }
+                // select the word reading stopped on, so it's easy to find on the page
+                clear_selected_text();
+                main_document_view->selected_character_rects.push_back(rect);
+                selected_text = word->text;
+            }
+            invalidate_render();
+        });
+    }
+
+    DocumentPos docpos = pos.to_document(doc());
+    if (!rrr_reader_->open(doc(), docpos.page, docpos.x, docpos.y)) {
+        show_error_message(L"rrr: there is no text from this page on (a scanned PDF needs OCR first)");
+    }
+}
+
+bool MainWidget::is_rrr_reader_visible() {
+    return rrr_reader_ && rrr_reader_->isVisible();
+}
+
+void MainWidget::open_web_link(const std::wstring& url) {
+    // Shift+click (or shift while running the command) bypasses the popup and goes straight to the browser
+    bool shift_held = QGuiApplication::keyboardModifiers() & Qt::ShiftModifier;
+    if (WEB_LINK_POPUP && WebLinkPopup::is_available() && !shift_held) {
+        get_web_link_popup()->open_url(QUrl(QString::fromStdWString(url)));
+    }
+    else {
+        open_web_url(url);
+    }
+}
+
 void MainWidget::handle_link_click(const PdfLink& link) {
     if (link.uri.substr(0, 4).compare("http") == 0) {
-        open_web_url(utf8_decode(link.uri));
+        open_web_link(utf8_decode(link.uri));
         return;
     }
 
@@ -6370,7 +6501,7 @@ void MainWidget::handle_open_link(const std::wstring& text, bool copy) {
         }
         else {
             if (QString::fromStdString(link.uri).startsWith("http")) {
-                open_web_url(utf8_decode(link.uri));
+                open_web_link(utf8_decode(link.uri));
             }
             else {
                 auto [page, offset_x, offset_y] = parse_uri(mupdf_context, doc()->doc, link.uri);

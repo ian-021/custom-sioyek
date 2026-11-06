@@ -24,6 +24,14 @@ else()
   )
 endif()
 
+# optional: in-window web link popups
+if(QT_VERSION_MAJOR GREATER_EQUAL 6)
+  find_package(Qt6 OPTIONAL_COMPONENTS WebEngineWidgets)
+  if(Qt6WebEngineWidgets_FOUND)
+    set(SIOYEK_HAS_WEBENGINE ON)
+  endif()
+endif()
+
 qt_standard_project_setup()
 
 qt_add_executable(sioyek WIN32 MACOSX_BUNDLE
@@ -41,6 +49,8 @@ qt_add_executable(sioyek WIN32 MACOSX_BUNDLE
     pdf_viewer/input.cpp pdf_viewer/input.h
     pdf_viewer/main.cpp
     pdf_viewer/main_widget.cpp pdf_viewer/main_widget.h
+    pdf_viewer/web_link_popup.cpp pdf_viewer/web_link_popup.h
+    pdf_viewer/rrr_reader.cpp pdf_viewer/rrr_reader.h
     pdf_viewer/mysortfilterproxymodel.cpp pdf_viewer/mysortfilterproxymodel.h
     pdf_viewer/new_file_checker.cpp pdf_viewer/new_file_checker.h
     pdf_viewer/path.cpp pdf_viewer/path.h
@@ -143,6 +153,10 @@ if((QT_VERSION_MAJOR GREATER 5))
         SIOYEK_QT6
   )
 
+  if(SIOYEK_HAS_WEBENGINE)
+    target_link_libraries(sioyek PRIVATE Qt::WebEngineWidgets)
+    target_compile_definitions(sioyek PRIVATE SIOYEK_HAS_WEBENGINE)
+  endif()
   target_link_libraries(sioyek PRIVATE
         Qt::OpenGLWidgets
   )

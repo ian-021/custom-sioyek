@@ -16,6 +16,12 @@ greaterThan(QT_MAJOR_VERSION, 5){
 	QT += openglwidgets
 	DEFINES += SIOYEK_QT6
 }
+
+# In-window web link popups need Qt WebEngine. Without it, links fall back to the system browser.
+!android:qtHaveModule(webenginewidgets){
+	QT += webenginewidgets
+	DEFINES += SIOYEK_HAS_WEBENGINE
+}
 else{
 	QT += openglextensions
 }
@@ -87,6 +93,8 @@ HEADERS += pdf_viewer/book.h \
            pdf_viewer/rapidfuzz_amalgamated.hpp \
            pdf_viewer/input.h \
            pdf_viewer/main_widget.h \
+           pdf_viewer/web_link_popup.h \
+           pdf_viewer/rrr_reader.h \
            pdf_viewer/pdf_renderer.h \
            pdf_viewer/pdf_view_opengl_widget.h \
            pdf_viewer/checksum.h \
@@ -115,6 +123,8 @@ SOURCES += pdf_viewer/book.cpp \
            pdf_viewer/input.cpp \
            pdf_viewer/main.cpp \
            pdf_viewer/main_widget.cpp \
+           pdf_viewer/web_link_popup.cpp \
+           pdf_viewer/rrr_reader.cpp \
            pdf_viewer/pdf_renderer.cpp \
            pdf_viewer/pdf_view_opengl_widget.cpp \
            pdf_viewer/checksum.cpp \

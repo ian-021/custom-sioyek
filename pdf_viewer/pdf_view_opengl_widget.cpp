@@ -67,6 +67,7 @@ extern float STRIKE_LINE_WIDTH;
 extern std::wstring RULER_DISPLAY_MODE;
 extern float RULER_COLOR[3];
 extern float RULER_MARKER_COLOR[3];
+extern float RULER_HIGHLIGHT_COLOR[3];
 extern float HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT;
 extern bool ADJUST_ANNOTATION_COLORS_FOR_DARK_MODE;
 extern bool HIDE_OVERLAPPING_LINK_LABELS;
@@ -1605,10 +1606,15 @@ void PdfViewOpenGLWidget::my_render(QPainter* painter) {
                 flags |= HRF_BORDER;
             }
 
+            // a translucent fill over the line, like a highlighter
+            bool is_highlight = RULER_DISPLAY_MODE == L"highlight";
+            if (is_highlight) {
+                flags |= HRF_FILL;
+            }
 
             glUseProgram(shared_gl_objects.highlight_program);
-            glUniform3fv(shared_gl_objects.highlight_color_uniform_location, 1, RULER_COLOR);
-            glUniform1f(shared_gl_objects.highlight_opacity_uniform_location, 1.0f);
+            glUniform3fv(shared_gl_objects.highlight_color_uniform_location, 1, is_highlight ? RULER_HIGHLIGHT_COLOR : RULER_COLOR);
+            glUniform1f(shared_gl_objects.highlight_opacity_uniform_location, is_highlight ? 0.3f : 1.0f);
             render_highlight_window(shared_gl_objects.highlight_program, ruler_rect.value(), flags, RULER_UNDERLINE_PIXEL_WIDTH);
         }
         if (underline) {
